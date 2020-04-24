@@ -18,8 +18,6 @@ redistribute it freely
 #include <stdio.h>
 #include <string.h>
 
-#include "config.h"
-
 /*
 these headers are required in order to support
 SQLite/SpatiaLite

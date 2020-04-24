@@ -32,6 +32,10 @@ SQLite/SpatiaLite
 #define ARG_TABLE	2
 #define ARG_GEOMETRY	3
 
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
+
 static void
 do_print_list (gaiaVectorLayersListPtr list, int n_mode)
 {
