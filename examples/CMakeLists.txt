@@ -1,0 +1,11 @@
+macro(build_example f)
+  add_executable(${f} ${f}.c)
+  target_link_libraries(${f} PUBLIC spatialite_i ${LIB_DEP})
+  install(TARGETS ${f})
+endmacro() 
+
+build_example(demo1)
+build_example(demo2)
+build_example(demo3)
+build_example(demo4)
+build_example(demo5)
