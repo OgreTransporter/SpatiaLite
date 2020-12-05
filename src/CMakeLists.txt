@@ -116,6 +116,7 @@ set(LIB_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_55.c
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_56.c
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_57.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_58.c
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_extra.c
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_prussian.c
   ${CMAKE_CURRENT_SOURCE_DIR}/srsinit/epsg_inlined_wgs84_00.c
