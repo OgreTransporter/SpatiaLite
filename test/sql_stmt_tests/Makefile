@@ -97,7 +97,11 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/config.h
+CONFIG_HEADER = $(top_builddir)/./fakeconfig.h \
+	$(top_builddir)/./config.h \
+	$(top_builddir)/./src/headers/spatialite/gaiaconfig.h \
+	$(top_builddir)/./config-msvc.h \
+	$(top_builddir)/./src/headers/spatialite/gaiaconfig-msvc.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_P = $(am__v_P_$(V))
@@ -164,7 +168,7 @@ INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
 LD = /usr/bin/ld -m elf_x86_64
 LDFLAGS = 
 LIBOBJS = 
-LIBS = -lrttopo -lfreexl -lproj -lsqlite3 -lz -lsqlite3  -L/usr/lib64 -lgeos_c
+LIBS = -lminizip -lrttopo -lfreexl -lproj -lsqlite3 -lz -lsqlite3  -L/usr/lib64 -lgeos_c
 LIBTOOL = $(SHELL) $(top_builddir)/libtool
 LIBXML2_CFLAGS = -I/usr/include/libxml2 
 LIBXML2_LIBS = -lxml2 
@@ -184,20 +188,20 @@ OTOOL64 =
 PACKAGE = libspatialite
 PACKAGE_BUGREPORT = a.furieri@lqt.it
 PACKAGE_NAME = libspatialite
-PACKAGE_STRING = libspatialite 5.0.0-beta1
+PACKAGE_STRING = libspatialite 5.0.1-devel
 PACKAGE_TARNAME = libspatialite
 PACKAGE_URL = 
-PACKAGE_VERSION = 5.0.0-beta1
+PACKAGE_VERSION = 5.0.1-devel
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
 PKG_CONFIG_LIBDIR = 
-PKG_CONFIG_PATH = 
+PKG_CONFIG_PATH = /usr/local/lib/pkgconfig
 RANLIB = ranlib
 SED = /usr/bin/sed
 SET_MAKE = 
 SHELL = /bin/sh
 STRIP = strip
-VERSION = 5.0.0-beta1
+VERSION = 5.0.1-devel
 abs_builddir = /home/sandro/fossil/libspatialite/test/sql_stmt_tests
 abs_srcdir = /home/sandro/fossil/libspatialite/test/sql_stmt_tests
 abs_top_builddir = /home/sandro/fossil/libspatialite
@@ -2326,6 +2330,12 @@ EXTRA_DIST = addpoint10.testcase \
 	reflectcoords7.testcase \
 	reflectcoords8.testcase \
 	reflectcoords9.testcase \
+	remextrasp1.testcase \
+	remextrasp2.testcase \
+	remextrasp3.testcase \
+	remextrasp4.testcase \
+	remextrasp5.testcase \
+	remextrasp6.testcase \
 	removedupl1.testcase \
 	removedupl2.testcase \
 	removedupl3.testcase \

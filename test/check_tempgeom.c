@@ -80,15 +80,16 @@ sql_test (sqlite3 * handle, const char *sql)
 int
 main (int argc, char *argv[])
 {
+#ifndef ENABLE_RTTOPO		/* RTTOPO is not supported: quitting */
+	return 0;
+#endif
+
     int retval = 0;
     int ret;
     sqlite3 *handle;
     const char *sql;
     sqlite3_stmt *stmt = NULL;
     char *err_msg = NULL;
-    char **results;
-    int rows;
-    int columns;
     void *cache = spatialite_alloc_connection ();
 
     if (argc > 1 || argv[0] == NULL)

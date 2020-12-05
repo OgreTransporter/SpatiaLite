@@ -2,7 +2,7 @@
 
  metatables.c -- creating the metadata tables and related triggers
 
- version 4.3, 2015 June 29
+ version 5.0, 2020 August 1
 
  Author: Sandro Furieri a.furieri@lqt.it
 
@@ -24,7 +24,7 @@ The Original Code is the SpatiaLite library
 
 The Initial Developer of the Original Code is Alessandro Furieri
  
-Portions created by the Initial Developer are Copyright (C) 2008-2015
+Portions created by the Initial Developer are Copyright (C) 2008-2020
 the Initial Developer. All Rights Reserved.
 
 Contributor(s):
@@ -64,7 +64,7 @@ the terms of any one of the MPL, the GPL or the LGPL.
 #include <spatialite/debug.h>
 
 #include <spatialite.h>
-#include <spatialite/spatialite.h>
+#include <spatialite/spatialite_ext.h>
 #include <spatialite_private.h>
 #include <spatialite/gaiaaux.h>
 #include <spatialite/gaiageo.h>
@@ -205,7 +205,7 @@ updateSpatiaLiteHistory (void *p_sqlite, const char *table,
     ret = sqlite3_prepare_v2 (sqlite, sql, strlen (sql), &stmt, NULL);
     if (ret != SQLITE_OK)
       {
-	  spatialite_e ("SQL error: %s\n%s\n", sql, sqlite3_errmsg (sqlite));
+	  spatialite_e ("SQL error: %s: %s\n", sql, sqlite3_errmsg (sqlite));
 	  goto stop;
       }
     sqlite3_reset (stmt);
@@ -1560,8 +1560,8 @@ create_virts_geometry_columns_field_infos (sqlite3 * sqlite)
     return 1;
 }
 
-static int
-create_geometry_columns_times (sqlite3 * sqlite)
+SPATIALITE_PRIVATE int
+create_geometry_columns_time (sqlite3 * sqlite)
 {
     char sql[4186];
     char *errMsg = NULL;
@@ -2296,7 +2296,7 @@ create_geometry_columns_views (sqlite3 * sqlite)
     return 1;
 }
 
-static int
+SPATIALITE_PRIVATE int
 create_data_licenses (sqlite3 * sqlite)
 {
     char sql[4186];
@@ -2777,7 +2777,7 @@ createAdvancedMetaData (void *p_sqlite)
 	return 0;
     if (!create_virts_geometry_columns_field_infos (sqlite))
 	return 0;
-    if (!create_geometry_columns_times (sqlite))
+    if (!create_geometry_columns_time (sqlite))
 	return 0;
     if (!create_geometry_columns_auth (sqlite))
 	return 0;
@@ -3075,7 +3075,7 @@ createTemporarySpatialRefSys (void *p_sqlite, const char *db_prefix)
 				     prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql_statement, NULL, NULL, &errMsg);
-    sqlite3_free(sql_statement);
+    sqlite3_free (sql_statement);
     if (ret != SQLITE_OK)
 	goto error;
     prefix = gaiaDoubleQuotedSql (db_prefix);
@@ -3115,6 +3115,306 @@ createTemporarySpatialRefSys (void *p_sqlite, const char *db_prefix)
     return 0;
 }
 
+static int
+createTemporaryViewsGeometryColumns (sqlite3 * sqlite, const char *db_prefix)
+{
+/* creating the VIEWS_GEOMETRY_COLUMNS table */
+    char *sql;
+    char *errMsg = NULL;
+    int ret;
+    char *prefix;
+
+/* creating the VIEWS_GEOMETRY_COLUMNS table */
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TABLE IF NOT EXISTS \"%s\".views_geometry_columns (\n"
+	 "view_name TEXT NOT NULL,\n" "view_geometry TEXT NOT NULL,\n"
+	 "view_rowid TEXT NOT NULL,\n" "f_table_name TEXT NOT NULL,\n"
+	 "f_geometry_column TEXT NOT NULL,\n" "read_only INTEGER NOT NULL,\n"
+	 "CONSTRAINT pk_geom_cols_views PRIMARY KEY "
+	 "(view_name, view_geometry),\n"
+	 "CONSTRAINT fk_views_geom_cols FOREIGN KEY "
+	 "(f_table_name, f_geometry_column) " "REFERENCES geometry_columns "
+	 "(f_table_name, f_geometry_column) " "ON DELETE CASCADE,\n"
+	 "CONSTRAINT ck_vw_rdonly CHECK (read_only IN (0,1)))", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    sqlite3_free (sql);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  return 0;
+      }
+/* creating an INDEX supporting the GEOMETRY_COLUMNS FK */
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql = sqlite3_mprintf ("CREATE INDEX IF NOT EXISTS \"%s\".idx_viewsjoin "
+			   "ON views_geometry_columns\n"
+			   "(f_table_name, f_geometry_column)", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+/* creating the VIEWS_GEOMETRY_COLUMNS triggers */
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_name_insert\n"
+	 "BEFORE INSERT ON 'views_geometry_columns'\n" "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_name value must not contain a single quote')\n"
+	 "WHERE NEW.view_name LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_name value must not contain a double quote')\n"
+	 "WHERE NEW.view_name LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: \n"
+	 "view_name value must be lower case')\n"
+	 "WHERE NEW.view_name <> lower(NEW.view_name);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_name_update\n"
+	 "BEFORE UPDATE OF 'view_name' ON 'views_geometry_columns'\n"
+	 "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_name value must not contain a single quote')\n"
+	 "WHERE NEW.view_name LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_name value must not contain a double quote')\n"
+	 "WHERE NEW.view_name LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_name value must be lower case')\n"
+	 "WHERE NEW.view_name <> lower(NEW.view_name);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_geometry_insert\n"
+	 "BEFORE INSERT ON 'views_geometry_columns'\n" "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_geometry value must not contain a single quote')\n"
+	 "WHERE NEW.view_geometry LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: \n"
+	 "view_geometry value must not contain a double quote')\n"
+	 "WHERE NEW.view_geometry LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_geometry value must be lower case')\n"
+	 "WHERE NEW.view_geometry <> lower(NEW.view_geometry);\n" "END",
+	 prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_geometry_update\n"
+	 "BEFORE UPDATE OF 'view_geometry' ON 'views_geometry_columns'\n"
+	 "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_geometry value must not contain a single quote')\n"
+	 "WHERE NEW.view_geometry LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: \n"
+	 "view_geometry value must not contain a double quote')\n"
+	 "WHERE NEW.view_geometry LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_geometry value must be lower case')\n"
+	 "WHERE NEW.view_geometry <> lower(NEW.view_geometry);\n" "END",
+	 prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_rowid_update\n"
+	 "BEFORE UPDATE OF 'view_rowid' ON 'views_geometry_columns'\n"
+	 "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_rowid value must not contain a single quote')\n"
+	 "WHERE NEW.f_geometry_column LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_rowid value must not contain a double quote')\n"
+	 "WHERE NEW.view_rowid LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "view_rowid value must be lower case')\n"
+	 "WHERE NEW.view_rowid <> lower(NEW.view_rowid);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_view_rowid_insert\n"
+	 "BEFORE INSERT ON 'views_geometry_columns'\n" "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_rowid value must not contain a single quote')\n"
+	 "WHERE NEW.view_rowid LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: \n"
+	 "view_rowid value must not contain a double quote')\n"
+	 "WHERE NEW.view_rowid LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "view_rowid value must be lower case')\n"
+	 "WHERE NEW.view_rowid <> lower(NEW.view_rowid);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_f_table_name_insert\n"
+	 "BEFORE INSERT ON 'views_geometry_columns'\n" "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "f_table_name value must not contain a single quote')\n"
+	 "WHERE NEW.f_table_name LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "f_table_name value must not contain a double quote')\n"
+	 "WHERE NEW.f_table_name LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: \n"
+	 "f_table_name value must be lower case')\n"
+	 "WHERE NEW.f_table_name <> lower(NEW.f_table_name);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_f_table_name_update\n"
+	 "BEFORE UPDATE OF 'f_table_name' ON 'views_geometry_columns'\n"
+	 "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_table_name value must not contain a single quote')\n"
+	 "WHERE NEW.f_table_name LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_table_name value must not contain a double quote')\n"
+	 "WHERE NEW.f_table_name LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_table_name value must be lower case')\n"
+	 "WHERE NEW.f_table_name <> lower(NEW.f_table_name);\n" "END", prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_f_geometry_column_insert\n"
+	 "BEFORE INSERT ON 'views_geometry_columns'\n" "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "f_geometry_column value must not contain a single quote')\n"
+	 "WHERE NEW.f_geometry_column LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: \n"
+	 "f_geometry_column value must not contain a double quote')\n"
+	 "WHERE NEW.f_geometry_column LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'insert on views_geometry_columns violates constraint: "
+	 "f_geometry_column value must be lower case')\n"
+	 "WHERE NEW.f_geometry_column <> lower(NEW.f_geometry_column);\n" "END",
+	 prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    prefix = gaiaDoubleQuotedSql (db_prefix);
+    sql =
+	sqlite3_mprintf
+	("CREATE TRIGGER IF NOT EXISTS \"%s\".vwgc_f_geometry_column_update\n"
+	 "BEFORE UPDATE OF 'f_geometry_column' ON 'views_geometry_columns'\n"
+	 "FOR EACH ROW BEGIN\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_geometry_column value must not contain a single quote')\n"
+	 "WHERE NEW.f_geometry_column LIKE ('%%''%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_geometry_column value must not contain a double quote')\n"
+	 "WHERE NEW.f_geometry_column LIKE ('%%\"%%');\n"
+	 "SELECT RAISE(ABORT,'update on views_geometry_columns violates constraint: "
+	 "f_geometry_column value must be lower case')\n"
+	 "WHERE NEW.f_geometry_column <> lower(NEW.f_geometry_column);\n" "END",
+	 prefix);
+    free (prefix);
+    ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+      {
+	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
+	  return 0;
+      }
+    sqlite3_free (sql);
+    return 1;
+}
+
 SPATIALITE_PRIVATE int
 createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 {
@@ -3140,26 +3440,28 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
 /* creating an INDEX corresponding to the SRID FK */
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql = sqlite3_mprintf ("CREATE INDEX IF NOT EXISTS \"%s\".idx_srid_geocols "
 			   "ON geometry_columns (srid)", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
+	  sqlite3_free (sql);
 	  sqlite3_free (errMsg);
 	  return 0;
       }
+    sqlite3_free (sql);
 /* creating the GEOMETRY_COLUMNS triggers */
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
@@ -3177,13 +3479,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "WHERE NEW.f_table_name <> lower(NEW.f_table_name);\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3201,13 +3504,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "WHERE NEW.f_table_name <> lower(NEW.f_table_name);\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3225,13 +3529,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3248,15 +3553,16 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "f_geometry_column value must be lower case')\n"
 	 "WHERE NEW.f_geometry_column <> lower(NEW.f_geometry_column);\n" "END",
 	 prefix);
-	 free(prefix);
+    free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3272,13 +3578,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "3000,3001,3002,3003,3004,3005,3006,3007));\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3295,13 +3602,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "3000,3001,3002,3003,3004,3005,3006,3007));\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3311,13 +3619,14 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "WHERE NOT(NEW.coord_dimension IN (2,3,4));\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
     prefix = gaiaDoubleQuotedSql (db_prefix);
     sql =
 	sqlite3_mprintf
@@ -3328,13 +3637,18 @@ createTemporaryGeometryColumns (void *p_sqlite, const char *db_prefix)
 	 "WHERE NOT(NEW.coord_dimension IN (2,3,4));\n" "END", prefix);
     free (prefix);
     ret = sqlite3_exec (sqlite, sql, NULL, NULL, &errMsg);
-    sqlite3_free (sql);
     if (ret != SQLITE_OK)
       {
 	  spatialite_e ("SQL error: %s: %s\n", sql, errMsg);
 	  sqlite3_free (errMsg);
+	  sqlite3_free (sql);
 	  return 0;
       }
+    sqlite3_free (sql);
+
+/* attempting to create views_geometry_columns on the same TMP-DB */
+    if (!createTemporaryViewsGeometryColumns (sqlite, db_prefix))
+	return 0;
     return 1;
 }
 

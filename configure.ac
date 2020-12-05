@@ -2,13 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(libspatialite, 5.0.0-beta1, a.furieri@lqt.it)
+AC_INIT(libspatialite, 5.0.1-devel, a.furieri@lqt.it)
 AC_LANG(C)
 AC_CONFIG_MACRO_DIR([m4])
 
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign no-define])
 AM_MAINTAINER_MODE
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS(./fakeconfig.h ./config.h ./src/headers/spatialite/gaiaconfig.h ./config-msvc.h ./src/headers/spatialite/gaiaconfig-msvc.h)
 
 # enabling huge-file support (64 bit file pointers)
 AH_TEMPLATE([_LARGE_FILE],
@@ -59,10 +59,14 @@ AH_TEMPLATE([OMIT_FREEXL],
             [Should be defined in order to disable FREEXL support.])
 AH_TEMPLATE([ENABLE_LIBXML2],
             [Should be defined in order to enable LIBXML2 support.])
+AH_TEMPLATE([ENABLE_MINIZIP],
+            [Should be defined in order to enable MiniZIP support.])
 AH_TEMPLATE([ENABLE_GEOPACKAGE],
             [Should be defined in order to enable GeoPackage support.])
-AH_TEMPLATE([TARGET_CPU],
+AH_TEMPLATE([SPATIALITE_TARGET_CPU],
             [Should contain a text-string describing the intended target CPU])
+AH_TEMPLATE([SPATIALITE_VERSION],
+            [the Version of this package.])
 AH_TEMPLATE([HAVE_DECL_SQLITE_INDEX_CONSTRAINT_LIKE],
             [depending on SQLite library version.])
 
@@ -152,11 +156,13 @@ AC_CONFIG_FILES([Makefile \
 		test/sql_stmt_proj492_tests/Makefile \
 		test/sql_stmt_proj493_tests/Makefile \
 		test/sql_stmt_proj600_tests/Makefile \
+		test/sql_stmt_proj720_tests/Makefile \
 		test/sql_stmt_proj600security_tests/Makefile \
 		test/sql_stmt_mathsql_tests/Makefile \
 		test/sql_stmt_rtgeom_tests/Makefile \
 		test/sql_stmt_rttopo_tests/Makefile \
 		test/sql_stmt_libxml2_tests/Makefile \
+		test/sql_stmt_libxml2_rttopo_tests/Makefile \
 		test/sql_stmt_security_tests/Makefile \
 		test/sql_stmt_xmlsec_tests/Makefile \
 		test/sql_stmt_freexl_tests/Makefile \
@@ -179,14 +185,18 @@ AC_CONFIG_FILES([Makefile \
 		test/sql_stmt_renameold_tests/Makefile \
 		test/sql_stmt_bufoptsnew_tests/Makefile \
 		test/sql_stmt_bufoptsold_tests/Makefile \
+		test/sql_stmt_minizip/Makefile \
+		test/sql_stmt_zip_proj6/Makefile \
 		examples/Makefile \
 		Doxyfile \
 		spatialite.pc])
 
 # exporting the TARGET_CPU string
 splite_cpu=`$CC -dumpmachine`
-AC_DEFINE_UNQUOTED([TARGET_CPU], ["$splite_cpu"])
+AC_DEFINE_UNQUOTED([SPATIALITE_TARGET_CPU], ["$splite_cpu"])
 
+# exporting the VERSION string
+AC_DEFINE_UNQUOTED([SPATIALITE_VERSION], ["$PACKAGE_VERSION"])
 
 #-----------------------------------------------------------------------
 #   --enable-mathsql
@@ -274,6 +284,7 @@ if test x"$enable_freexl" != "xno"; then
 else
   AC_DEFINE(OMIT_FREEXL)
 fi
+
 #-----------------------------------------------------------------------
 
 #-----------------------------------------------------------------------
@@ -415,6 +426,18 @@ if test x"$enable_libxml2" != "xno"; then
   AC_SUBST(LIBXML2_CFLAGS)
   AC_SUBST(LIBXML2_LIBS)
   AC_DEFINE(ENABLE_LIBXML2)
+fi
+
+#-----------------------------------------------------------------------
+#   --enable-minizip
+#
+AC_ARG_ENABLE(minizip, [AS_HELP_STRING(
+  [--enable-minizip], [enables MiniZIP inclusion [default=yes]])],
+  [], [enable_minizip=yes])
+if test x"$enable_minizip" != "xno"; then
+  AC_CHECK_HEADERS(minizip/unzip.h,, [AC_MSG_ERROR([cannot find minizip/unzip.h, bailing out])])
+  AC_SEARCH_LIBS(unzLocateFile, minizip,,AC_MSG_ERROR(['libminizip' is required but it doesn't seem to be installed on this system.]))
+  AC_DEFINE(ENABLE_MINIZIP)
 fi
 
 #-----------------------------------------------------------------------

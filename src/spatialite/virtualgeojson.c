@@ -2,7 +2,7 @@
 
  virtualgeojson.c -- SQLite3 extension [VIRTUAL TABLE GeoJson]
 
- version 5.0, 2018 December 12
+ version 5.0, 2020 August 1
 
  Author: Sandro Furieri a.furieri@lqt.it
 
@@ -24,7 +24,7 @@ The Original Code is the SpatiaLite library
 
 The Initial Developer of the Original Code is Alessandro Furieri
  
-Portions created by the Initial Developer are Copyright (C) 2016
+Portions created by the Initial Developer are Copyright (C) 2016-2020
 the Initial Developer. All Rights Reserved.
 
 Contributor(s):
@@ -60,7 +60,7 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 #include <spatialite/gaiaaux.h>
 #include <spatialite.h>
-#include <spatialite/spatialite.h>
+#include <spatialite/spatialite_ext.h>
 #include <spatialite/geojson.h>
 
 #ifdef _WIN32
@@ -2349,7 +2349,11 @@ vgeojson_create (sqlite3 * db, void *pAux, int argc, const char *const *argv,
     p_vt->MaxY = -DBL_MAX;
 
 /* attempting to open the GeoJSON file for reading */
+#ifdef _WIN32
+    in = gaia_win_fopen (path, "rb");
+#else
     in = fopen (path, "rb");
+#endif
     if (in == NULL)
       {
 	  error_message =

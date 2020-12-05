@@ -97,7 +97,11 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/config.h
+CONFIG_HEADER = $(top_builddir)/./fakeconfig.h \
+	$(top_builddir)/./config.h \
+	$(top_builddir)/./src/headers/spatialite/gaiaconfig.h \
+	$(top_builddir)/./config-msvc.h \
+	$(top_builddir)/./src/headers/spatialite/gaiaconfig-msvc.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_P = $(am__v_P_@AM_V@)
@@ -2326,6 +2330,12 @@ EXTRA_DIST = addpoint10.testcase \
 	reflectcoords7.testcase \
 	reflectcoords8.testcase \
 	reflectcoords9.testcase \
+	remextrasp1.testcase \
+	remextrasp2.testcase \
+	remextrasp3.testcase \
+	remextrasp4.testcase \
+	remextrasp5.testcase \
+	remextrasp6.testcase \
 	removedupl1.testcase \
 	removedupl2.testcase \
 	removedupl3.testcase \

@@ -2,7 +2,7 @@
 
  gg_advanced.c -- Gaia advanced geometric operations
   
- version 4.3, 2015 June 29
+ version 5.0, 2020 August 1
 
  Author: Sandro Furieri a.furieri@lqt.it
 
@@ -24,7 +24,7 @@ The Original Code is the SpatiaLite library
 
 The Initial Developer of the Original Code is Alessandro Furieri
  
-Portions created by the Initial Developer are Copyright (C) 2008-2015
+Portions created by the Initial Developer are Copyright (C) 2008-2020
 the Initial Developer. All Rights Reserved.
 
 Contributor(s):
@@ -309,6 +309,7 @@ GAIAGEO_DECLARE double
 gaiaCurvosityIndex (const void *p_cache, gaiaLinestringPtr ln, int extra_points)
 {
 /* calculates the Curvosity Index of some Linestring */
+#ifndef OMIT_GEOS		/* including GEOS */
     double x;
     double y;
     double z;
@@ -413,7 +414,8 @@ gaiaCurvosityIndex (const void *p_cache, gaiaLinestringPtr ln, int extra_points)
 	  geo->FirstLinestring = NULL;	/* releasing ownership on Line */
 	  geo->LastLinestring = NULL;
 	  gaiaFreeGeomColl (geo);
-      }
+      }	      
+#endif /* end including GEOS */
     return -1.0;
 }
 
